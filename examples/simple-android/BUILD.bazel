@@ -1,6 +1,19 @@
 load("@rules_android//android:rules.bzl", "android_library")
 load("@rules_android_lint//rules:defs.bzl", "android_lint", "android_lint_test")
 load("@rules_android_lint//toolchains:toolchain.bzl", "android_lint_toolchain")
+load("@rules_kotlin//kotlin:jvm.bzl", "kt_jvm_library")
+
+kt_jvm_library(
+    name = "kt_lib",
+    srcs = ["Foo.kt"],
+)
+
+android_lint(
+    name = "kt_lib_lint",
+    srcs = ["Foo.kt"],
+    android_lint_config = "lint.xml",
+    lib = ":kt_lib",
+)
 
 android_library(
     name = "lib",
@@ -25,6 +38,9 @@ android_lint_test(
 android_lint_toolchain(
     name = "android_lint_default",
     android_lint_config = "lint_global.xml",
+    java_language_level = "21",
+    kotlin_language_level = "2.1",
+    compile_sdk_version = "35",
     visibility = ["//visibility:public"],
 )
 
