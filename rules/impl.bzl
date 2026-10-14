@@ -4,6 +4,7 @@
 load(
     "@rules_android//providers:providers.bzl",
     "AndroidLibraryResourceClassJarProvider",
+    "ApkInfo",
 )
 load("@rules_java//java:defs.bzl", "JavaInfo", "java_common")
 load(
@@ -26,16 +27,21 @@ def _run_android_lint(
         module_name,
         output,
         srcs,
+        test_srcs,
         deps,
         aars,
         resource_files,
         manifest,
+        merged_manifest,
         compile_sdk_version,
         java_language_level,
         kotlin_language_level,
         baseline,
         config,
         warnings_as_errors,
+        report_warnings,
+        check_test_sources,
+        is_library,
         custom_rules,
         disable_checks,
         enable_checks,
@@ -53,16 +59,21 @@ def _run_android_lint(
         module_name: The name of the module
         output: The output file
         srcs: The source files
+        test_srcs: The test source files
         deps: Depset of aars and jars to include on the classpath
         aars: Depset of the aar nodes
         resource_files: The Android resource files
         manifest: The Android manifest file
+        merged_manifest: The merged Android manifest file, if any
         compile_sdk_version: The Android compile SDK version
         java_language_level: The Java language level
         kotlin_language_level: The Kotlin language level
         baseline: The Android Lint baseline file
         config: The Android Lint config file
         warnings_as_errors: Whether to treat warnings as errors
+        report_warnings: Whether to include warnings in the report
+        check_test_sources: Whether every check runs on the test sources
+        is_library: Whether the linted target is a library rather than an application
         custom_rules: List of jars containing the custom rules
         disable_checks: List of additional checks to disable
         enable_checks: List of additional checks to enable
@@ -92,12 +103,18 @@ def _run_android_lint(
     for src in _utils.list_or_depset_to_list(srcs):
         args.add("--src", src)
         inputs.append(src)
+    for src in _utils.list_or_depset_to_list(test_srcs):
+        args.add("--test-src", src)
+        inputs.append(src)
     for resource_file in _utils.list_or_depset_to_list(resource_files):
         args.add("--resource", resource_file)
         inputs.append(resource_file)
     if manifest:
         args.add("--android-manifest", manifest)
         inputs.append(manifest)
+    if merged_manifest:
+        args.add("--merged-manifest", merged_manifest)
+        inputs.append(merged_manifest)
     if not regenerate and baseline:
         args.add("--baseline-file", baseline)
         inputs.append(baseline)
@@ -108,6 +125,12 @@ def _run_android_lint(
         inputs.append(config)
     if warnings_as_errors:
         args.add("--warnings-as-errors")
+    if report_warnings:
+        args.add("--report-warnings")
+    if check_test_sources:
+        args.add("--check-test-sources")
+    if is_library:
+        args.add("--library")
     for custom_rule in _utils.list_or_depset_to_list(custom_rules):
         args.add("--custom-rule", custom_rule)
         inputs.append(custom_rule)
@@ -236,16 +259,22 @@ def process_android_lint_issues(ctx, regenerate):
         module_name = _get_module_name(ctx),
         output = output,
         srcs = ctx.files.srcs,
+        test_srcs = ctx.files.test_srcs,
         deps = depset(transitive = deps),
         aars = depset(transitive = aars),
         resource_files = ctx.files.resource_files,
         manifest = manifest,
+        merged_manifest = ctx.file.merged_manifest,
         compile_sdk_version = _utils.get_android_lint_toolchain(ctx).compile_sdk_version,
         java_language_level = _utils.get_android_lint_toolchain(ctx).java_language_level,
         kotlin_language_level = _utils.get_android_lint_toolchain(ctx).kotlin_language_level,
         baseline = getattr(ctx.file, "baseline", None),
         config = config,
         warnings_as_errors = ctx.attr.warnings_as_errors,
+        report_warnings = ctx.attr.report_warnings,
+        check_test_sources = ctx.attr.check_test_sources,
+        # Lint skips application-only checks (MissingVersion, UnusedResources) for libraries.
+        is_library = ApkInfo not in ctx.attr.lib,
         custom_rules = ctx.files.custom_rules,
         disable_checks = ctx.attr.disable_checks,
         enable_checks = ctx.attr.enable_checks,

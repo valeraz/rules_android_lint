@@ -48,6 +48,13 @@ internal class AndroidLintActionArgs(
     transform = argsParserPathTransformer,
   )
 
+  val testSrcs: List<Path> by parser
+    .adding(
+      names = arrayOf("--test-src"),
+      help = "Test sources; lint analyzes them as test code",
+      transform = argsParserPathTransformer,
+    ).default { emptyList() }
+
   val output: Path by parser.storing(
     names = arrayOf("--output"),
     help = "",
@@ -65,6 +72,13 @@ internal class AndroidLintActionArgs(
     .storing(
       names = arrayOf("--android-manifest"),
       help = "",
+      transform = argsParserPathTransformer,
+    ).default { null }
+
+  val mergedManifest: Path? by parser
+    .storing(
+      names = arrayOf("--merged-manifest"),
+      help = "Merged manifest lint reads SDK versions and components from",
       transform = argsParserPathTransformer,
     ).default { null }
 
@@ -119,6 +133,24 @@ internal class AndroidLintActionArgs(
     .flagging(
       names = arrayOf("--warnings-as-errors"),
       help = "",
+    ).default { false }
+
+  val reportWarnings: Boolean by parser
+    .flagging(
+      names = arrayOf("--report-warnings"),
+      help = "Include warnings in the report instead of passing --nowarn to lint",
+    ).default { false }
+
+  val checkTestSources: Boolean by parser
+    .flagging(
+      names = arrayOf("--check-test-sources"),
+      help = "Run every check on the test sources, not only test-scoped ones",
+    ).default { false }
+
+  val library: Boolean by parser
+    .flagging(
+      names = arrayOf("--library"),
+      help = "Model the module as a library rather than an application",
     ).default { false }
 
   val enableChecks: List<String> by parser

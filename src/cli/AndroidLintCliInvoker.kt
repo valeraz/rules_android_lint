@@ -20,6 +20,8 @@ class AndroidLintCliInvoker(
       .apply { isAccessible = true }
   private val setCheckDependenciesMethod =
     cliFlagsClass.getDeclaredMethod("setCheckDependencies", Boolean::class.java)
+  private val setCheckTestSourcesMethod =
+    cliFlagsClass.getDeclaredMethod("setCheckTestSources", Boolean::class.java)
 
   /*
    * Exit Status:
@@ -35,11 +37,15 @@ class AndroidLintCliInvoker(
   fun invoke(
     args: Array<String>,
     enableCheckDependencies: Boolean = false,
+    checkTestSources: Boolean = false,
   ): Int {
     // A fresh Main per invocation: Main carries per-run flag state, and the cached invoker may
     // serve concurrent work requests in a multiplex worker.
     val mainInstance = mainClass.getDeclaredConstructor().newInstance()
-    setCheckDependenciesMethod.invoke(flagsField.get(mainInstance), enableCheckDependencies)
+    val flags = flagsField.get(mainInstance)
+    setCheckDependenciesMethod.invoke(flags, enableCheckDependencies)
+    // No CLI flag exists for this; Gradle sets it on the flags object the same way.
+    setCheckTestSourcesMethod.invoke(flags, checkTestSources)
 
     // Null out the context classloader while lint runs so service loading inside lint cannot
     // resolve against the worker's own classpath.

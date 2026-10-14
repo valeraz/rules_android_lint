@@ -38,10 +38,13 @@ internal class AndroidLintRunner(
     projectFile.writeText(
       createProjectXMLString(
         moduleName = args.label,
+        library = args.library,
         rootDir = rootDir,
         srcs = args.srcs.sortedDescending(),
+        testSrcs = args.testSrcs.sortedDescending(),
         resources = args.resources.sortedDescending(),
         androidManifest = args.androidManifest,
+        mergedManifest = args.mergedManifest,
         classpathJars = args.classpath.sortedDescending(),
         classpathAars = emptyList(),
         classpathExtractedAarDirectories = args.classpathAarPairs,
@@ -116,7 +119,7 @@ internal class AndroidLintRunner(
       )
     if (actionArgs.warningsAsErrors) {
       args.add("-Werror")
-    } else {
+    } else if (!actionArgs.reportWarnings) {
       args.add("--nowarn")
     }
     if (actionArgs.config != null) {
@@ -148,6 +151,7 @@ internal class AndroidLintRunner(
     return invoker.invoke(
       args = args.toTypedArray(),
       enableCheckDependencies = actionArgs.enableCheckDependencies,
+      checkTestSources = actionArgs.checkTestSources,
     )
   }
 }

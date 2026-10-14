@@ -13,9 +13,12 @@ import kotlin.io.path.pathString
 internal fun createProjectXMLString(
   moduleName: String,
   rootDir: String,
+  library: Boolean = false,
   srcs: List<Path>,
   resources: List<Path>,
+  testSrcs: List<Path> = emptyList(),
   androidManifest: Path?,
+  mergedManifest: Path? = null,
   classpathJars: List<Path>,
   classpathAars: List<Path>,
   classpathExtractedAarDirectories: List<Pair<Path, Path>>,
@@ -35,7 +38,7 @@ internal fun createProjectXMLString(
     document.createElement("module").also {
       it.setAttribute("name", moduleName)
       it.setAttribute("android", if (androidManifest != null) "true" else "false")
-      // it.setAttribute("library", "false")
+      it.setAttribute("library", if (library) "true" else "false")
       // it.setAttribute("compile-sdk-version", "get-actual-value-here")
       projectElement.appendChild(it)
     }
@@ -53,6 +56,13 @@ internal fun createProjectXMLString(
     moduleElement.appendChild(element)
   }
 
+  testSrcs.forEach { src ->
+    val element = document.createElement("src")
+    element.setAttribute("file", src.pathString)
+    element.setAttribute("test", "true")
+    moduleElement.appendChild(element)
+  }
+
   resources.forEach { res ->
     val element = document.createElement("resource")
     element.setAttribute("file", res.pathString)
@@ -62,6 +72,16 @@ internal fun createProjectXMLString(
   if (androidManifest != null) {
     val element = document.createElement("manifest")
     element.setAttribute("file", androidManifest.pathString)
+    moduleElement.appendChild(element)
+  }
+
+  // Without a merged manifest lint merges the dependency AAR manifests into the module's own, and
+  // ManifestMerger2 rejects that for libraries ("Cannot add library dependencies manifests when
+  // creating a library"), so a library falls back to its own manifest.
+  val effectiveMergedManifest = mergedManifest ?: androidManifest.takeIf { library }
+  if (effectiveMergedManifest != null) {
+    val element = document.createElement("merged-manifest")
+    element.setAttribute("file", effectiveMergedManifest.pathString)
     moduleElement.appendChild(element)
   }
 

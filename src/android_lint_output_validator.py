@@ -23,15 +23,19 @@ def validate_output(lint_baseline: str) -> int:
     # issues - valid issues that need to be fixed or baselined
     # issues_fixed - issues that have been fixed but are still in the baseline
     # issues_ignored - issues that exist but are in the baseline file (ignored)
+    # issues_warnings - reported warnings; they never fail the test (Gradle's abortOnError)
     issues = []
     issues_fixed = []
     issues_ignored = []
+    issues_warnings = []
     for issue in output_parsed:
         message = issue["message"]
         if issue["id"] == "LintBaseline":
             issues_ignored.append(issue)
         elif "perhaps they have been fixed" in message:
             issues_fixed.append(issue)
+        elif issue["severity"] not in ("Error", "Fatal"):
+            issues_warnings.append(issue)
         else:
             issues.append(issue)
 
@@ -53,7 +57,7 @@ def parse_android_lint(report: str) -> List[Dict[str, Any]]:
         message = issue.get("message")
         if not issue_id or message is None:
             raise ValueError("expected each <issue> to have id and message attributes")
-        results.append({"id": issue_id, "message": message})
+        results.append({"id": issue_id, "message": message, "severity": issue.get("severity", "Error")})
     return results
 
 
