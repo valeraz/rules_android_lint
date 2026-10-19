@@ -146,6 +146,229 @@ lint_report_test(
     lint = ":aar_rules_dirty_lint",
 )
 
+# --- Test sources: Gradle's checkTestSources ------------------------------------------------------
+
+filegroup(
+    name = "restricted_lib",
+    srcs = glob(["fixtures/restricted/main/**/*.java"]),
+)
+
+# A test file passed as a plain src counts as production code, so calling a
+# @RestrictTo(TESTS) API from it is a RestrictedApi error. This is the shape every
+# android_lint_test had before test_srcs existed.
+android_lint(
+    name = "test_sources_as_main_lint",
+    srcs = [
+        "fixtures/restricted/main/androidx/annotation/RestrictTo.java",
+        "fixtures/restricted/main/com/example/TestOnlyApi.java",
+        "fixtures/restricted/test/com/example/TestOnlyApiTest.java",
+    ],
+    lib = ":restricted_lib",
+    warnings_as_errors = True,
+)
+
+lint_report_test(
+    name = "test_sources_as_main_report_test",
+    expected_issues = ["RestrictedApi"],
+    lint = ":test_sources_as_main_lint",
+    rejected_issues = ["LintError"],
+)
+
+# The same file as a test source is allowed to use test-only APIs.
+android_lint(
+    name = "test_sources_lint",
+    srcs = [
+        "fixtures/restricted/main/androidx/annotation/RestrictTo.java",
+        "fixtures/restricted/main/com/example/TestOnlyApi.java",
+    ],
+    lib = ":restricted_lib",
+    test_srcs = ["fixtures/restricted/test/com/example/TestOnlyApiTest.java"],
+    warnings_as_errors = True,
+)
+
+lint_report_test(
+    name = "test_sources_report_test",
+    lint = ":test_sources_lint",
+    rejected_issues = [
+        "LintError",
+        "RestrictedApi",
+    ],
+)
+
+filegroup(
+    name = "greeter_lib",
+    srcs = ["fixtures/testsources/main/com/example/Greeter.java"],
+)
+
+# By default lint only runs test-scoped checks on test sources: DefaultLocale in a test is not reported.
+android_lint(
+    name = "test_sources_scoped_checks_lint",
+    srcs = ["fixtures/testsources/main/com/example/Greeter.java"],
+    lib = ":greeter_lib",
+    test_srcs = ["fixtures/testsources/test/com/example/GreeterTest.java"],
+    warnings_as_errors = True,
+)
+
+lint_report_test(
+    name = "test_sources_scoped_checks_report_test",
+    lint = ":test_sources_scoped_checks_lint",
+    rejected_issues = [
+        "LintError",
+        "DefaultLocale",
+    ],
+)
+
+# check_test_sources runs every check on test sources, like Gradle's lint.checkTestSources = true.
+android_lint(
+    name = "test_sources_all_checks_lint",
+    srcs = ["fixtures/testsources/main/com/example/Greeter.java"],
+    check_test_sources = True,
+    lib = ":greeter_lib",
+    test_srcs = ["fixtures/testsources/test/com/example/GreeterTest.java"],
+    warnings_as_errors = True,
+)
+
+lint_report_test(
+    name = "test_sources_all_checks_report_test",
+    expected_issues = ["DefaultLocale"],
+    lint = ":test_sources_all_checks_lint",
+    rejected_issues = ["LintError"],
+)
+
+# --- Warnings: reported without failing ------------------------------------------------------------
+
+# Without warnings_as_errors lint runs with --nowarn and the warning never reaches the report.
+android_lint(
+    name = "nowarn_lint",
+    srcs = ["fixtures/basic/Dirty.java"],
+    lib = ":basic_dirty_lib",
+)
+
+lint_report_test(
+    name = "nowarn_report_test",
+    lint = ":nowarn_lint",
+    rejected_issues = [
+        "LintError",
+        "DefaultLocale",
+    ],
+)
+
+# report_warnings keeps the warning in the report (Gradle's default), and the test still passes
+# because only errors fail it (Gradle's abortOnError).
+android_lint(
+    name = "report_warnings_lint",
+    srcs = ["fixtures/basic/Dirty.java"],
+    lib = ":basic_dirty_lib",
+    report_warnings = True,
+)
+
+lint_report_test(
+    name = "report_warnings_report_test",
+    expected_issues = ["DefaultLocale"],
+    lint = ":report_warnings_lint",
+    rejected_issues = ["LintError"],
+)
+
+android_lint_test(
+    name = "report_warnings_pass_test",
+    srcs = ["fixtures/basic/Dirty.java"],
+    lib = ":basic_dirty_lib",
+    report_warnings = True,
+)
+
+# --- Library modeling ------------------------------------------------------------------------------
+
+filegroup(
+    name = "library_lib",
+    srcs = ["fixtures/library/Library.java"],
+)
+
+# A target without ApkInfo is a library, so application-only checks such as MissingVersion
+# (no android:versionCode in the manifest) do not fire.
+android_lint(
+    name = "library_lint",
+    srcs = ["fixtures/library/Library.java"],
+    lib = ":library_lib",
+    manifest = "fixtures/library/AndroidManifest.xml",
+    warnings_as_errors = True,
+)
+
+lint_report_test(
+    name = "library_report_test",
+    lint = ":library_lint",
+    rejected_issues = [
+        "LintError",
+        "MissingVersion",
+    ],
+)
+
+# A library with AAR dependencies: lint cannot merge dependency manifests into a library manifest
+# ("Cannot add library dependencies manifests when creating a library"), so the module's own
+# manifest doubles as the merged one instead of crashing the analysis with a LintError.
+android_lint(
+    name = "library_with_aar_dep_lint",
+    srcs = ["fixtures/library/Library.java"],
+    lib = ":library_lib",
+    manifest = "fixtures/library/AndroidManifest.xml",
+    warnings_as_errors = True,
+    deps = [":compose_lint_aar"],
+)
+
+lint_report_test(
+    name = "library_with_aar_dep_report_test",
+    lint = ":library_with_aar_dep_lint",
+    rejected_issues = [
+        "LintError",
+        "MissingVersion",
+    ],
+)
+
+# --- Merged manifest: SDK versions ---------------------------------------------------------------
+
+filegroup(
+    name = "manifest_lib",
+    srcs = ["fixtures/manifest/AndroidManifest.xml"],
+)
+
+# With only a source manifest that declares no <uses-sdk>, lint knows neither minSdk nor targetSdk,
+# so targetSdk-gated checks such as Autofill (EditText without autofillHints, targetSdk >= 26) stay
+# silent.
+android_lint(
+    name = "manifest_without_sdk_versions_lint",
+    srcs = [],
+    lib = ":manifest_lib",
+    manifest = "fixtures/manifest/AndroidManifest.xml",
+    resource_files = ["fixtures/manifest/res/layout/login.xml"],
+    warnings_as_errors = True,
+)
+
+lint_report_test(
+    name = "manifest_without_sdk_versions_report_test",
+    lint = ":manifest_without_sdk_versions_lint",
+    rejected_issues = [
+        "Autofill",
+        "LintError",
+    ],
+)
+
+# The merged manifest carries the SDK versions, as Gradle's does, and the check fires.
+android_lint(
+    name = "merged_manifest_lint",
+    srcs = [],
+    lib = ":manifest_lib",
+    manifest = "fixtures/manifest/AndroidManifest.xml",
+    merged_manifest = "fixtures/manifest/merged/AndroidManifest.xml",
+    resource_files = ["fixtures/manifest/res/layout/login.xml"],
+    warnings_as_errors = True,
+)
+
+lint_report_test(
+    name = "merged_manifest_report_test",
+    expected_issues = ["Autofill"],
+    lint = ":merged_manifest_lint",
+    rejected_issues = ["LintError"],
+)
+
 test_suite(
     name = "tests",
     tests = [
@@ -157,5 +380,16 @@ test_suite(
         ":basic_disabled_check_test",
         ":custom_rules_clean_test",
         ":custom_rules_dirty_report_test",
+        ":library_report_test",
+        ":library_with_aar_dep_report_test",
+        ":manifest_without_sdk_versions_report_test",
+        ":merged_manifest_report_test",
+        ":nowarn_report_test",
+        ":report_warnings_pass_test",
+        ":report_warnings_report_test",
+        ":test_sources_all_checks_report_test",
+        ":test_sources_as_main_report_test",
+        ":test_sources_report_test",
+        ":test_sources_scoped_checks_report_test",
     ],
 )

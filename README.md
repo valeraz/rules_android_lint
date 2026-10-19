@@ -91,3 +91,23 @@ android_lint_test(
     lib = ":lib",
 )
 ```
+
+### Matching Gradle's lint behavior
+
+`android_lint_test` and `android_lint` take a few attributes that mirror what the Android Gradle
+plugin passes to lint, so a module linted under Bazel reports the same issues as under Gradle:
+
+- `test_srcs`: test sources (Gradle's test and androidTest source sets). Lint analyzes them as test
+  code, so test-only APIs (`@RestrictTo(TESTS)`, `@VisibleForTesting`) are allowed there. Test
+  sources must live under a different source root than `srcs`, as they do in Gradle.
+- `check_test_sources`: run every check on `test_srcs`, like `lint.checkTestSources = true`. By
+  default only checks that explicitly target test sources run on them.
+- `report_warnings`: keep warnings in the report. Only errors fail the test, like Gradle's
+  `abortOnError`; without it lint runs with `--nowarn` and warnings never reach the report.
+- `merged_manifest`: the manifest lint reads `minSdkVersion`/`targetSdkVersion` and components
+  from, like the merged manifest Gradle hands lint. Without it lint knows neither SDK version.
+- A `lib` without `ApkInfo` is modeled as a library, so application-only checks (`MissingVersion`,
+  `UnusedResources`) do not fire on libraries.
+
+The integration tests under `tests/integration` (`test_sources_*`, `report_warnings_*`,
+`library_*`, `merged_manifest_*`) show each behavior with and without the attribute.
